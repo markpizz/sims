@@ -103,7 +103,6 @@ static t_stat mty_devio(uint32 dev, uint64 *data)
     TMLN *lp;
     int line;
     uint64 word;
-    int ch;
 
     switch(dev & 07) {
     case CONO:
@@ -200,12 +199,15 @@ static t_stat mty_output_svc (UNIT *uptr)
     static int scan = 0;
     uint64 word;
     int i, ch;
+    int32 txdone;
 
     for (i = 0; i < MTY_LINES; i++) {
         /* Round robin scan 32 lines. */
         scan = (scan + 1) & 037;
 
-        if (tmxr_txdone_ln (&mty_ldsc[scan])) {
+        if (0 == (mty_active_bitmask & (1 << scan)))    /* Line active? */
+            continue;
+        if ((txdone = tmxr_txdone_ln (&mty_ldsc[scan]))) {
             /* Write up to five characters extracted from a word.  NUL
                can only be in the first character. */
             word = mty_output_word[scan];
@@ -215,22 +217,22 @@ static t_stat mty_output_svc (UNIT *uptr)
                 if (tmxr_putc_ln (&mty_ldsc[scan], ch) != SCPE_STALL)
                     mty_output_word[scan] = (word << 7) & FMASK;
             } else {
-                sim_debug(DEBUG_DETAIL, &mty_dev, "Output ready line %d\n", scan);
-                status &= ~MTY_LINE;
-                status |= scan << 12;
-                status |= MTY_ODONE;
-                set_interrupt(MTY_DEVNUM, status & MTY_PIA);
-                mty_active_bitmask &= ~(1 << scan);
+                if (txdone == 1) {
+                    sim_debug(DEBUG_DETAIL, &mty_dev, "Output ready line %d\n", scan);
+                    status &= ~MTY_LINE;
+                    status |= scan << 12;
+                    status |= MTY_ODONE;
+                    set_interrupt(MTY_DEVNUM, status & MTY_PIA);
+                    mty_active_bitmask &= ~(1 << scan);
+                    break;
+                }
             }
-
-            break;
         }
     }
 
     tmxr_poll_tx (&mty_desc);
-    if (mty_active_bitmask)
-        //sim_activate_after (uptr, 1000000); TOO SLOW!
-        sim_activate_after (uptr, 100);
+
+    sim_activate_after (uptr, 1000000);
 
     return SCPE_OK;
 }
@@ -242,10 +244,7 @@ static t_stat mty_reset (DEVICE *dptr)
     sim_debug(DEBUG_CMD, &mty_dev, "Reset\n");
     if (mty_unit->flags & UNIT_ATT) {
         sim_activate (mty_unit, tmxr_poll);
-        if (mty_active_bitmask)
-            sim_activate_after (&mty_unit[1], 100);
-        else
-            sim_cancel (&mty_unit[1]);
+        sim_activate_after (&mty_unit[1], 100);
     } else {
         sim_cancel (&mty_unit[0]);
         sim_cancel (&mty_unit[1]);
@@ -277,7 +276,6 @@ static t_stat mty_attach (UNIT *uptr, CONST char *cptr)
         status = 0;
         sim_activate (uptr, tmxr_poll);
     }
-    mty_active_bitmask = 0;
     return stat;
 }
 
