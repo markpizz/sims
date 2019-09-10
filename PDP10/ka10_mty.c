@@ -201,8 +201,6 @@ static t_stat mty_output_svc (UNIT *uptr)
     uint64 word;
     int i, ch;
 
-    tmxr_poll_tx (&mty_desc);
-
     for (i = 0; i < MTY_LINES; i++) {
         /* Round robin scan 32 lines. */
         scan = (scan + 1) & 037;
@@ -229,6 +227,7 @@ static t_stat mty_output_svc (UNIT *uptr)
         }
     }
 
+    tmxr_poll_tx (&mty_desc);
     if (mty_active_bitmask)
         //sim_activate_after (uptr, 1000000); TOO SLOW!
         sim_activate_after (uptr, 100);
@@ -278,6 +277,7 @@ static t_stat mty_attach (UNIT *uptr, CONST char *cptr)
         status = 0;
         sim_activate (uptr, tmxr_poll);
     }
+    mty_active_bitmask = 0;
     return stat;
 }
 
