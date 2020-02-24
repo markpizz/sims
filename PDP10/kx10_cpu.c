@@ -248,13 +248,9 @@ t_stat  (*dev_tab[128])(uint32 dev, uint64 *data);
 t_addr  (*dev_irqv[128])(uint32 dev, t_addr addr);
 t_stat  rtc_srv(UNIT * uptr);
 int32   rtc_tps = 60;
-#if ITS
 t_stat  qua_srv(UNIT * uptr);
 int32   qua_tps = 125000;
-#endif
-#if KL
 t_stat  tim_srv(UNIT * uptr);
-#endif
 int32   tmxr_poll = 10000;
 
 /* Physical address range for Rubin 10-11 interface. */
@@ -346,12 +342,8 @@ t_bool build_dev_tab (void);
 */
 
 UNIT cpu_unit[] = { { UDATA (&rtc_srv, UNIT_IDLE|UNIT_FIX|UNIT_BINK|UNIT_TWOSEG, 256 * 1024) },
-#if ITS
-                    { UDATA (&qua_srv, UNIT_IDLE|UNIT_DIS, 0) }
-#endif
-#if KL
+                    { UDATA (&qua_srv, UNIT_IDLE|UNIT_DIS, 0) },
                     { UDATA (&tim_srv, UNIT_IDLE|UNIT_DIS, 0) }
-#endif
                    };
 
 REG cpu_reg[] = {
@@ -568,7 +560,7 @@ DEBTAB              cpu_debug[] = {
 
 DEVICE cpu_dev = {
     "CPU", &cpu_unit[0], cpu_reg, cpu_mod,
-    1, 8, 22, 1, 8, 36,
+    3, 8, 22, 1, 8, 36,
     &cpu_ex, &cpu_dep, &cpu_reset,
     NULL, NULL, NULL, NULL, DEV_DEBUG, 0, cpu_debug,
     NULL, NULL, &cpu_help, NULL, NULL, &cpu_description
@@ -9985,22 +9977,22 @@ rtc_srv(UNIT * uptr)
     return SCPE_OK;
 }
 
-#if ITS
 t_stat
 qua_srv(UNIT * uptr)
 {
+#if ITS
     if ((fault_data & 1) == 0 && pi_enable && !pi_pending && (FLAGS & USER) != 0) {
        mem_prot = 1;
     }
     qua_time = BIT17;
+#endif
     return SCPE_OK;
 }
-#endif
 
-#if KL
 t_stat
 tim_srv(UNIT * uptr)
 {
+#if KL
     double us;
 
     /* See if we are counting to overflow or period */
@@ -10013,9 +10005,9 @@ tim_srv(UNIT * uptr)
     }
     set_interrupt(4 << 2, mtr_irq);
     (void)sim_activate_after_d(uptr, us);
+#endif
     return SCPE_OK;
 }
-#endif
 
 /*
  * This sequence of instructions is a mix that hopefully
